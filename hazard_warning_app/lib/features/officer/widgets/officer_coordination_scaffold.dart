@@ -7,15 +7,18 @@ class OfficerCoordinationScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.currentIndex = 0,
+    this.floatingActionButton,
   });
 
   final Widget body;
   final int currentIndex;
+  final Widget? floatingActionButton;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: body,
+      floatingActionButton: floatingActionButton,
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
