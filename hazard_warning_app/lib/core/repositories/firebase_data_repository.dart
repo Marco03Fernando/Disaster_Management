@@ -116,6 +116,49 @@ class FirebaseDataRepository implements DataRepository {
   }
 
   @override
+  Future<String> registerShelter(Shelter shelter) async {
+    await _shelters.doc(shelter.id).set({
+      'name': shelter.name,
+      'district': shelter.district,
+      'address': shelter.address,
+      'capacity': shelter.capacity,
+      'occupancy': shelter.occupancy,
+      'nearestAlternativeId': shelter.nearestAlternativeId,
+    });
+
+    return shelter.id;
+  }
+
+  @override
+  Future<void> updateShelter(Shelter shelter) async {
+    await _shelters.doc(shelter.id).update({
+      'name': shelter.name,
+      'district': shelter.district,
+      'address': shelter.address,
+      'capacity': shelter.capacity,
+      'occupancy': shelter.occupancy,
+      'nearestAlternativeId': shelter.nearestAlternativeId,
+    });
+  }
+
+  @override
+  Future<void> deleteShelter(String shelterId) async {
+    final batch = _db.batch();
+
+    batch.delete(_shelters.doc(shelterId));
+
+    final references = await _shelters
+        .where('nearestAlternativeId', isEqualTo: shelterId)
+        .get();
+
+    for (final doc in references.docs) {
+      batch.update(doc.reference, {'nearestAlternativeId': null});
+    }
+
+    await batch.commit();
+  }
+
+  @override
   Future<void> updateShelterOccupancy(String shelterId, int occupancy) async {
     await _shelters.doc(shelterId).update({'occupancy': occupancy});
   }

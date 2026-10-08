@@ -279,13 +279,6 @@ class _ShelterDetailScreenState extends State<ShelterDetailScreen> {
                                       color: const Color(0xFFDCFCE7),
                                       borderRadius: BorderRadius.circular(999),
                                     ),
-                                    child: const Text(
-                                      '1.8 km',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.successGreen,
-                                      ),
-                                    ),
                                   ),
                                 ],
                               ),
