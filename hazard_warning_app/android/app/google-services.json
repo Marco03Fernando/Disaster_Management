@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "549451773588",
+    "project_id": "dmc-hazard-warning",
+    "storage_bucket": "dmc-hazard-warning.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:549451773588:android:1a5041f4e0950157212681",
+        "android_client_info": {
+          "package_name": "lk.sliit.dmc.hazard_warning_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCMFyUEd1gEVTKjfqHdWxuEhBO21r3iTvc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

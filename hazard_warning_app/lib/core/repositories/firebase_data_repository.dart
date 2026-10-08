@@ -1,0 +1,468 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hazard_warning_app/core/data/seed_data.dart';
+import 'package:hazard_warning_app/core/models/models.dart';
+import 'package:hazard_warning_app/core/repositories/data_repository.dart';
+
+/// Firestore-backed repository. Collections are created on first write.
+class FirebaseDataRepository implements DataRepository {
+  FirebaseDataRepository({FirebaseFirestore? firestore})
+    : _db = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _db;
+
+  CollectionReference<Map<String, dynamic>> get _reports =>
+      _db.collection('hazard_reports');
+  CollectionReference<Map<String, dynamic>> get _warnings =>
+      _db.collection('hazard_warnings');
+  CollectionReference<Map<String, dynamic>> get _shelters =>
+      _db.collection('shelters');
+  CollectionReference<Map<String, dynamic>> get _postEvents =>
+      _db.collection('post_event_reports');
+
+  @override
+  Stream<List<HazardReport>> watchReports() {
+    return _reports
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(_reportFromDoc).toList());
+  }
+
+  @override
+  Future<List<HazardReport>> getReports() async {
+    final snap = await _reports.orderBy('submittedAt', descending: true).get();
+    return snap.docs.map(_reportFromDoc).toList();
+  }
+
+  @override
+  Future<HazardReport?> getReport(String id) async {
+    final doc = await _reports.doc(id).get();
+    if (!doc.exists) return null;
+    return _reportFromDoc(doc);
+  }
+
+  @override
+  Future<String> submitReport(HazardReport draft) async {
+    await _reports.doc(draft.id).set(_reportToMap(draft));
+    return draft.id;
+  }
+
+  @override
+  Future<void> verifyReport(String id) async {
+    await _reports.doc(id).update({
+      'status': ReportStatus.verified.name,
+      'verifiedAt': FieldValue.serverTimestamp(),
+      'verifiedBy': 'Duty officer',
+      'syncState': SyncState.synced.name,
+    });
+  }
+
+  @override
+  Future<void> rejectReport(String id) async {
+    await _reports.doc(id).update({'status': ReportStatus.rejected.name});
+  }
+
+  @override
+  Stream<List<HazardWarning>> watchWarnings() {
+    return _warnings
+        .orderBy('issuedAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map(_warningFromDoc).toList());
+  }
+
+  @override
+  Future<String> issueWarning(HazardWarning warning) async {
+    await _warnings.doc(warning.id).set({
+      'sourceReportId': warning.sourceReportId,
+      'category': warning.category.name,
+      'severity': warning.severity.name,
+      'scope': warning.scope.name,
+      'targetArea': warning.targetArea,
+      'targetAreas': warning.targetAreas,
+      'recipientCount': warning.recipientCount,
+      'issuedAt': Timestamp.fromDate(warning.issuedAt),
+      'channels': warning.channels,
+      ..._deliveryFields(warning),
+    });
+    return warning.id;
+  }
+
+  @override
+  Future<void> updateWarning(HazardWarning warning) async {
+    await _warnings.doc(warning.id).update(_deliveryFields(warning));
+  }
+
+  Map<String, dynamic> _deliveryFields(HazardWarning warning) => {
+    'level': warning.level.name,
+    'escalations': warning.escalations,
+    'deliveries': [
+      for (final d in warning.deliveries)
+        {
+          'channel': d.channel.name,
+          'targeted': d.targeted,
+          'delivered': d.delivered,
+          'failed': d.failed,
+          'recovered': d.recovered,
+          'fallback': d.fallback?.name,
+        },
+    ],
+  };
+
+  @override
+  Stream<List<Shelter>> watchShelters() {
+    return _shelters
+        .orderBy('name')
+        .snapshots()
+        .map((snap) => snap.docs.map(_shelterFromDoc).toList());
+  }
+
+  @override
+  Future<void> updateShelterOccupancy(String shelterId, int occupancy) async {
+    await _shelters.doc(shelterId).update({'occupancy': occupancy});
+  }
+
+  @override
+  Future<List<ReliefTeam>> getReliefTeams() async {
+    final snap = await _db.collection('relief_teams').orderBy('name').get();
+    return snap.docs.map((doc) {
+      final d = doc.data();
+      return ReliefTeam(
+        id: doc.id,
+        name: d['name'] as String,
+        lead: d['lead'] as String,
+        members: d['members'] as int,
+        assignedShelterId: d['assignedShelterId'] as String,
+        status: d['status'] as String,
+      );
+    }).toList();
+  }
+
+  @override
+  Future<List<ReliefStock>> getReliefStock() async {
+    final snap = await _db.collection('relief_stock').orderBy('district').get();
+    return snap.docs.map((doc) => _stockFromMap(doc.data())).toList();
+  }
+
+  @override
+  Future<List<PostEventReport>> getPostEventReports() async {
+    final snap = await _postEvents.get();
+    return snap.docs.map((doc) => _postEventFromDoc(doc)).toList();
+  }
+
+  @override
+  Future<PostEventReport?> getPostEventReport(String id) async {
+    final doc = await _postEvents.doc(id).get();
+    return doc.exists ? _postEventFromDoc(doc) : null;
+  }
+
+  /// Target areas (with registered-citizen counts) are reference data loaded
+  /// once at startup so the form can read them synchronously.
+  final _areas = <BroadcastScope, List<TargetAreaOption>>{};
+
+  @override
+  List<TargetAreaOption> areasForScope(BroadcastScope scope) =>
+      _areas[scope] ?? const [];
+
+  /// Adds seed areas missing from the database and back-fills `order` on older
+  /// documents. Existing documents (e.g. edited recipient counts) are kept.
+  Future<void> _syncTargetAreas() async {
+    final col = _db.collection('target_areas');
+    final existing = {
+      for (final doc in (await col.get()).docs) doc.id: doc.data(),
+    };
+    for (final scope in BroadcastScope.values) {
+      final areas = SeedData.targetAreas(scope);
+      for (var i = 0; i < areas.length; i++) {
+        final a = areas[i];
+        final current = existing[a.id];
+        if (current == null) {
+          await col.doc(a.id).set({
+            'label': a.label,
+            'scope': a.scope.name,
+            'recipientCount': a.recipientCount,
+            'order': i,
+          });
+        } else if (current['order'] == null) {
+          await col.doc(a.id).update({'order': i});
+        }
+      }
+    }
+  }
+
+  Future<void> _loadTargetAreas() async {
+    final snap = await _db.collection('target_areas').get();
+    _areas.clear();
+    final docs = snap.docs.toList()
+      ..sort((a, b) {
+        final byOrder = ((a.data()['order'] as int?) ?? 9999).compareTo(
+          (b.data()['order'] as int?) ?? 9999,
+        );
+        return byOrder != 0
+            ? byOrder
+            : (a.data()['label'] as String).compareTo(
+                b.data()['label'] as String,
+              );
+      });
+    for (final doc in docs) {
+      final d = doc.data();
+      final scope = BroadcastScope.values.byName(d['scope'] as String);
+      _areas
+          .putIfAbsent(scope, () => [])
+          .add(
+            TargetAreaOption(
+              id: doc.id,
+              label: d['label'] as String,
+              recipientCount: d['recipientCount'] as int,
+              scope: scope,
+            ),
+          );
+    }
+  }
+
+  ReliefStock _stockFromMap(Map<String, dynamic> d) => ReliefStock(
+    district: d['district'] as String,
+    foodUnits: d['foodUnits'] as int,
+    waterUnits: d['waterUnits'] as int,
+    medicineUnits: d['medicineUnits'] as int,
+  );
+
+  Map<String, dynamic> _stockToMap(ReliefStock s) => {
+    'district': s.district,
+    'foodUnits': s.foodUnits,
+    'waterUnits': s.waterUnits,
+    'medicineUnits': s.medicineUnits,
+  };
+
+  PostEventReport _postEventFromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final d = doc.data()!;
+    DateTime ts(Object? v) => (v as Timestamp).toDate();
+    return PostEventReport(
+      id: doc.id,
+      title: d['title'] as String,
+      subtitle: d['subtitle'] as String,
+      districtCount: d['districtCount'] as int,
+      alertCount: d['alertCount'] as int,
+      citizensReached: d['citizensReached'] as int,
+      peakShelterOccupancy: d['peakShelterOccupancy'] as int,
+      hasIncompleteData: d['hasIncompleteData'] as bool,
+      incompleteRangeLabel: d['incompleteRangeLabel'] as String,
+      alertTimeline: [for (final t in d['alertTimeline'] as List) ts(t)],
+      reachByDay: [
+        for (final r in d['reachByDay'] as List)
+          ReachPoint(
+            day: ts(r['day']),
+            count: r['count'] as int,
+            partial: r['partial'] as bool,
+          ),
+      ],
+      shelterSeries: [
+        for (final s in d['shelterSeries'] as List)
+          ShelterPoint(
+            day: ts(s['day']),
+            occupancy: s['occupancy'] as int,
+            incomplete: s['incomplete'] as bool,
+          ),
+      ],
+      resourcesByDistrict: [
+        for (final r in d['resourcesByDistrict'] as List)
+          _stockFromMap(Map<String, dynamic>.from(r as Map)),
+      ],
+    );
+  }
+
+  Map<String, dynamic> _postEventToMap(PostEventReport r) => {
+    'title': r.title,
+    'subtitle': r.subtitle,
+    'districtCount': r.districtCount,
+    'alertCount': r.alertCount,
+    'citizensReached': r.citizensReached,
+    'peakShelterOccupancy': r.peakShelterOccupancy,
+    'hasIncompleteData': r.hasIncompleteData,
+    'incompleteRangeLabel': r.incompleteRangeLabel,
+    'alertTimeline': [for (final t in r.alertTimeline) Timestamp.fromDate(t)],
+    'reachByDay': [
+      for (final p in r.reachByDay)
+        {
+          'day': Timestamp.fromDate(p.day),
+          'count': p.count,
+          'partial': p.partial,
+        },
+    ],
+    'shelterSeries': [
+      for (final p in r.shelterSeries)
+        {
+          'day': Timestamp.fromDate(p.day),
+          'occupancy': p.occupancy,
+          'incomplete': p.incomplete,
+        },
+    ],
+    'resourcesByDistrict': [
+      for (final s in r.resourcesByDistrict) _stockToMap(s),
+    ],
+  };
+
+  HazardReport _reportFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+    return HazardReport(
+      id: doc.id,
+      category: HazardCategory.values.byName(d['category'] as String),
+      areaLabel: d['areaLabel'] as String,
+      locationLabel: d['locationLabel'] as String,
+      coordinates: GeoCoordinate(
+        latitude: (d['latitude'] as num).toDouble(),
+        longitude: (d['longitude'] as num).toDouble(),
+      ),
+      status: ReportStatus.values.byName(d['status'] as String),
+      submittedAt: (d['submittedAt'] as Timestamp).toDate(),
+      photoPath: d['photoPath'] as String?,
+      notes: d['notes'] as String?,
+      syncState: SyncState.values.byName(d['syncState'] as String? ?? 'synced'),
+      verifiedAt: (d['verifiedAt'] as Timestamp?)?.toDate(),
+      verifiedBy: d['verifiedBy'] as String?,
+    );
+  }
+
+  Map<String, dynamic> _reportToMap(HazardReport report) => {
+    'category': report.category.name,
+    'areaLabel': report.areaLabel,
+    'locationLabel': report.locationLabel,
+    'latitude': report.coordinates.latitude,
+    'longitude': report.coordinates.longitude,
+    'status': report.status.name,
+    'submittedAt': Timestamp.fromDate(report.submittedAt),
+    'photoPath': report.photoPath,
+    'notes': report.notes,
+    'syncState': report.syncState.name,
+    'verifiedAt': report.verifiedAt != null
+        ? Timestamp.fromDate(report.verifiedAt!)
+        : null,
+    'verifiedBy': report.verifiedBy,
+  };
+
+  HazardWarning _warningFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+    return HazardWarning(
+      id: doc.id,
+      sourceReportId: d['sourceReportId'] as String,
+      category: HazardCategory.values.byName(d['category'] as String),
+      severity: WarningSeverity.values.byName(d['severity'] as String),
+      scope: BroadcastScope.values.byName(d['scope'] as String),
+      targetAreas:
+          (d['targetAreas'] as List?)?.cast<String>() ??
+          [d['targetArea'] as String],
+      recipientCount: d['recipientCount'] as int,
+      issuedAt: (d['issuedAt'] as Timestamp).toDate(),
+      channels: (d['channels'] as List).cast<String>(),
+      level: WarningLevel.values.byName((d['level'] as String?) ?? 'warning'),
+      escalations: (d['escalations'] as int?) ?? 0,
+      deliveries: [
+        for (final raw in (d['deliveries'] as List? ?? const []))
+          ChannelDelivery(
+            channel: AlertChannel.values.byName(raw['channel'] as String),
+            targeted: raw['targeted'] as int,
+            delivered: raw['delivered'] as int,
+            failed: raw['failed'] as int,
+            recovered: (raw['recovered'] as int?) ?? 0,
+            fallback: raw['fallback'] == null
+                ? null
+                : AlertChannel.values.byName(raw['fallback'] as String),
+          ),
+      ],
+    );
+  }
+
+  Shelter _shelterFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+    return Shelter(
+      id: doc.id,
+      name: d['name'] as String,
+      district: d['district'] as String,
+      address: d['address'] as String,
+      capacity: d['capacity'] as int,
+      occupancy: d['occupancy'] as int,
+      nearestAlternativeId: d['nearestAlternativeId'] as String?,
+    );
+  }
+
+  /// Call once after Firebase project is connected to populate demo shelters.
+  Future<void> seedSheltersIfEmpty() async {
+    final snap = await _shelters.limit(1).get();
+    if (snap.docs.isNotEmpty) return;
+    for (final shelter in SeedData.initialShelters()) {
+      await _shelters.doc(shelter.id).set({
+        'name': shelter.name,
+        'district': shelter.district,
+        'address': shelter.address,
+        'capacity': shelter.capacity,
+        'occupancy': shelter.occupancy,
+        'nearestAlternativeId': shelter.nearestAlternativeId,
+      });
+    }
+  }
+
+  /// Adds demo reports that are not in the database yet; existing documents
+  /// (including ones an officer has since verified or rejected) are kept.
+  Future<void> seedReportsIfEmpty() async {
+    final existing = (await _reports.get()).docs.map((d) => d.id).toSet();
+    for (final report in SeedData.initialReports()) {
+      if (!existing.contains(report.id)) await submitReport(report);
+    }
+  }
+
+  Future<bool> _isEmpty(CollectionReference<Map<String, dynamic>> c) async =>
+      (await c.limit(1).get()).docs.isEmpty;
+
+  /// Populates every empty collection with demo data (a collection that
+  /// already has documents is left untouched), then loads reference data.
+  Future<void> initialize() async {
+    await seedSheltersIfEmpty();
+    await seedReportsIfEmpty();
+
+    if (await _isEmpty(_warnings)) {
+      for (final w in SeedData.initialWarnings()) {
+        await _warnings.doc(w.id).set({
+          'sourceReportId': w.sourceReportId,
+          'category': w.category.name,
+          'severity': w.severity.name,
+          'scope': w.scope.name,
+          'targetArea': w.targetArea,
+          'targetAreas': w.targetAreas,
+          'recipientCount': w.recipientCount,
+          'issuedAt': Timestamp.fromDate(w.issuedAt),
+          'channels': w.channels,
+          ..._deliveryFields(w),
+        });
+      }
+    }
+
+    await _syncTargetAreas();
+
+    final teams = _db.collection('relief_teams');
+    if (await _isEmpty(teams)) {
+      for (final t in SeedData.initialTeams()) {
+        await teams.doc(t.id).set({
+          'name': t.name,
+          'lead': t.lead,
+          'members': t.members,
+          'assignedShelterId': t.assignedShelterId,
+          'status': t.status,
+        });
+      }
+    }
+
+    final stock = _db.collection('relief_stock');
+    if (await _isEmpty(stock)) {
+      for (final s in SeedData.initialRelief()) {
+        await stock.doc(s.district).set(_stockToMap(s));
+      }
+    }
+
+    if (await _isEmpty(_postEvents)) {
+      final report = SeedData.kelaniFloodReport();
+      await _postEvents.doc(report.id).set(_postEventToMap(report));
+    }
+
+    await _loadTargetAreas();
+  }
+}
