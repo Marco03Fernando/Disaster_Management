@@ -281,21 +281,15 @@ class SeedData {
   static List<ReliefStock> initialRelief() => const [
     ReliefStock(
       district: 'Colombo',
-      foodUnits: 4200,
-      waterUnits: 6800,
-      medicineUnits: 920,
+      items: {'Food': 4200, 'Water': 6800, 'Medicine': 920},
     ),
     ReliefStock(
       district: 'Gampaha',
-      foodUnits: 3100,
-      waterUnits: 5200,
-      medicineUnits: 640,
+      items: {'Food': 3100, 'Water': 5200, 'Medicine': 640},
     ),
     ReliefStock(
       district: 'Kalutara',
-      foodUnits: 2800,
-      waterUnits: 4100,
-      medicineUnits: 580,
+      items: {'Food': 2800, 'Water': 4100, 'Medicine': 580},
     ),
   ];
 

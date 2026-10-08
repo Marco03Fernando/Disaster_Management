@@ -186,6 +186,29 @@ class FirebaseDataRepository implements DataRepository {
   }
 
   @override
+  Future<String> addReliefStock(ReliefStock stock) async {
+    await _db
+        .collection('relief_stock')
+        .doc(stock.district)
+        .set(_stockToMap(stock));
+
+    return stock.district;
+  }
+
+  @override
+  Future<void> updateReliefStock(ReliefStock stock) async {
+    await _db
+        .collection('relief_stock')
+        .doc(stock.district)
+        .set(_stockToMap(stock));
+  }
+
+  @override
+  Future<void> deleteReliefStock(String district) async {
+    await _db.collection('relief_stock').doc(district).delete();
+  }
+
+  @override
   Future<List<PostEventReport>> getPostEventReports() async {
     final snap = await _postEvents.get();
     return snap.docs.map((doc) => _postEventFromDoc(doc)).toList();
@@ -261,18 +284,31 @@ class FirebaseDataRepository implements DataRepository {
     }
   }
 
-  ReliefStock _stockFromMap(Map<String, dynamic> d) => ReliefStock(
-    district: d['district'] as String,
-    foodUnits: d['foodUnits'] as int,
-    waterUnits: d['waterUnits'] as int,
-    medicineUnits: d['medicineUnits'] as int,
-  );
+  ReliefStock _stockFromMap(Map<String, dynamic> d) {
+    // New dynamic format.
+    if (d['items'] is Map) {
+      final rawItems = Map<String, dynamic>.from(d['items'] as Map);
+
+      return ReliefStock(
+        district: d['district'] as String,
+        items: rawItems.map(
+          (key, value) => MapEntry(key, (value as num).toInt()),
+        ),
+      );
+    }
+
+    // Backward compatibility for existing Firebase documents.
+    return ReliefStock(
+      district: d['district'] as String,
+      foodUnits: (d['foodUnits'] as num?)?.toInt() ?? 0,
+      waterUnits: (d['waterUnits'] as num?)?.toInt() ?? 0,
+      medicineUnits: (d['medicineUnits'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   Map<String, dynamic> _stockToMap(ReliefStock s) => {
     'district': s.district,
-    'foodUnits': s.foodUnits,
-    'waterUnits': s.waterUnits,
-    'medicineUnits': s.medicineUnits,
+    'items': s.items,
   };
 
   PostEventReport _postEventFromDoc(
