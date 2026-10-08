@@ -99,6 +99,47 @@ class LocalDataRepository implements DataRepository {
   }
 
   @override
+  Future<String> registerShelter(Shelter shelter) async {
+    _shelters.add(shelter);
+    _emitShelters();
+    return shelter.id;
+  }
+
+  @override
+  Future<void> updateShelter(Shelter shelter) async {
+    final index = _shelters.indexWhere((s) => s.id == shelter.id);
+
+    if (index < 0) return;
+
+    _shelters[index] = shelter;
+    _emitShelters();
+  }
+
+  @override
+  Future<void> deleteShelter(String shelterId) async {
+    _shelters.removeWhere((s) => s.id == shelterId);
+
+    // Clear references to the deleted shelter.
+    for (var i = 0; i < _shelters.length; i++) {
+      final shelter = _shelters[i];
+
+      if (shelter.nearestAlternativeId == shelterId) {
+        _shelters[i] = Shelter(
+          id: shelter.id,
+          name: shelter.name,
+          district: shelter.district,
+          address: shelter.address,
+          capacity: shelter.capacity,
+          occupancy: shelter.occupancy,
+          nearestAlternativeId: null,
+        );
+      }
+    }
+
+    _emitShelters();
+  }
+
+  @override
   Future<void> updateShelterOccupancy(String shelterId, int occupancy) async {
     final index = _shelters.indexWhere((s) => s.id == shelterId);
     if (index < 0) return;

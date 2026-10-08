@@ -12,6 +12,9 @@ abstract class DataRepository {
   Future<String> issueWarning(HazardWarning warning);
   Future<void> updateWarning(HazardWarning warning);
   Stream<List<Shelter>> watchShelters();
+  Future<String> registerShelter(Shelter shelter);
+  Future<void> updateShelter(Shelter shelter);
+  Future<void> deleteShelter(String shelterId);
   Future<void> updateShelterOccupancy(String shelterId, int occupancy);
 
   Future<List<ReliefTeam>> getReliefTeams();

@@ -197,6 +197,34 @@ class AppState extends ChangeNotifier {
     return _services.repository.updateShelterOccupancy(shelterId, occupancy);
   }
 
+  Future<String> registerShelter({
+    required String name,
+    required String district,
+    required String address,
+    required int capacity,
+    String? nearestAlternativeId,
+  }) async {
+    final shelter = Shelter(
+      id: 'SH-${DateTime.now().millisecondsSinceEpoch % 100000}',
+      name: name,
+      district: district,
+      address: address,
+      capacity: capacity,
+      occupancy: 0,
+      nearestAlternativeId: nearestAlternativeId,
+    );
+
+    return _services.repository.registerShelter(shelter);
+  }
+
+  Future<void> updateShelter(Shelter shelter) {
+    return _services.repository.updateShelter(shelter);
+  }
+
+  Future<void> deleteShelter(String shelterId) {
+    return _services.repository.deleteShelter(shelterId);
+  }
+
   Shelter? shelterById(String id) {
     try {
       return _shelters.firstWhere((s) => s.id == id);
