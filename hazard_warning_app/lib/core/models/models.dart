@@ -386,16 +386,20 @@ class ReliefTeam {
     required this.name,
     required this.lead,
     required this.members,
-    required this.assignedShelterId,
+    required this.responseArea,
     required this.status,
+    required this.currentLocation,
+    required this.dispatchLocation,
   });
 
   final String id;
   final String name;
   final String lead;
-  final int members;
-  final String assignedShelterId;
+  final List<String> members;
+  final String responseArea;
   final String status;
+  final String currentLocation;
+  final String dispatchLocation;
 }
 
 class ReliefStock {

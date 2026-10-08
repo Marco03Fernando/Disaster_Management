@@ -260,21 +260,41 @@ class SeedData {
   ];
 
   static List<ReliefTeam> initialTeams() => [
-    const ReliefTeam(
+    ReliefTeam(
       id: 'RT-12',
       name: 'Kolonnawa response unit',
       lead: 'Officer Nimal',
-      members: 8,
-      assignedShelterId: 'SH-042',
+      members: const [
+        'Nimal Perera',
+        'Kasun Silva',
+        'Dilan Fernando',
+        'Chamod Perera',
+        'Ruwan Silva',
+        'Tharindu Jayasuriya',
+        'Amal Fernando',
+        'Sahan Perera',
+      ],
+      responseArea: 'Kelaniya',
       status: 'On site',
+      currentLocation: 'Kolonnawa',
+      dispatchLocation: 'Sedawatta M.V.',
     ),
-    const ReliefTeam(
+    ReliefTeam(
       id: 'RT-18',
       name: 'Kelani basin logistics',
       lead: 'Officer Priya',
-      members: 6,
-      assignedShelterId: 'SH-051',
+      members: const [
+        'Priya Fernando',
+        'Kamal Perera',
+        'Rashmi Silva',
+        'Nuwan Fernando',
+        'Suresh Kumar',
+        'Dinesh Perera',
+      ],
+      responseArea: 'Kelaniya',
       status: 'En route',
+      currentLocation: 'Kelaniya',
+      dispatchLocation: 'Kelani M.V.',
     ),
   ];
 

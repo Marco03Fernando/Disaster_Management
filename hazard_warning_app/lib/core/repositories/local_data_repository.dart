@@ -11,6 +11,7 @@ class LocalDataRepository implements DataRepository {
     _warnings.addAll(SeedData.initialWarnings());
     _postEvents.add(SeedData.kelaniFloodReport());
     _reliefStock.addAll(SeedData.initialRelief());
+    _reliefTeams.addAll(SeedData.initialTeams());
   }
 
   final _reports = <HazardReport>[];
@@ -18,6 +19,7 @@ class LocalDataRepository implements DataRepository {
   final _shelters = <Shelter>[];
   final _postEvents = <PostEventReport>[];
   final List<ReliefStock> _reliefStock = [];
+  final List<ReliefTeam> _reliefTeams = [];
 
   final _reportsCtrl = StreamController<List<HazardReport>>.broadcast();
   final _warningsCtrl = StreamController<List<HazardWarning>>.broadcast();
@@ -159,7 +161,29 @@ class LocalDataRepository implements DataRepository {
   }
 
   @override
-  Future<List<ReliefTeam>> getReliefTeams() async => SeedData.initialTeams();
+  Future<List<ReliefTeam>> getReliefTeams() async {
+    return List.unmodifiable(_reliefTeams);
+  }
+
+  @override
+  Future<String> addReliefTeam(ReliefTeam team) async {
+    _reliefTeams.add(team);
+    return team.id;
+  }
+
+  @override
+  Future<void> updateReliefTeam(ReliefTeam team) async {
+    final index = _reliefTeams.indexWhere((item) => item.id == team.id);
+
+    if (index < 0) return;
+
+    _reliefTeams[index] = team;
+  }
+
+  @override
+  Future<void> deleteReliefTeam(String teamId) async {
+    _reliefTeams.removeWhere((item) => item.id == teamId);
+  }
 
   @override
   Future<List<ReliefStock>> getReliefStock() async {

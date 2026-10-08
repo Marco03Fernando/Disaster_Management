@@ -166,17 +166,27 @@ class FirebaseDataRepository implements DataRepository {
   @override
   Future<List<ReliefTeam>> getReliefTeams() async {
     final snap = await _db.collection('relief_teams').orderBy('name').get();
+
     return snap.docs.map((doc) {
-      final d = doc.data();
-      return ReliefTeam(
-        id: doc.id,
-        name: d['name'] as String,
-        lead: d['lead'] as String,
-        members: d['members'] as int,
-        assignedShelterId: d['assignedShelterId'] as String,
-        status: d['status'] as String,
-      );
+      return _teamFromDoc(doc);
     }).toList();
+  }
+
+  @override
+  Future<String> addReliefTeam(ReliefTeam team) async {
+    await _db.collection('relief_teams').doc(team.id).set(_teamToMap(team));
+
+    return team.id;
+  }
+
+  @override
+  Future<void> updateReliefTeam(ReliefTeam team) async {
+    await _db.collection('relief_teams').doc(team.id).set(_teamToMap(team));
+  }
+
+  @override
+  Future<void> deleteReliefTeam(String teamId) async {
+    await _db.collection('relief_teams').doc(teamId).delete();
   }
 
   @override
@@ -283,6 +293,44 @@ class FirebaseDataRepository implements DataRepository {
           );
     }
   }
+
+  ReliefTeam _teamFromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data()!;
+
+    final rawMembers = d['members'];
+
+    final List<String> members;
+
+    if (rawMembers is List) {
+      members = rawMembers.cast<String>();
+    } else if (rawMembers is int) {
+      // Backward compatibility with the old member-count format.
+      members = List.generate(rawMembers, (index) => 'Member ${index + 1}');
+    } else {
+      members = const [];
+    }
+
+    return ReliefTeam(
+      id: doc.id,
+      name: d['name'] as String? ?? '',
+      lead: d['lead'] as String? ?? '',
+      members: members,
+      responseArea: d['responseArea'] as String? ?? '',
+      status: d['status'] as String? ?? 'Available',
+      currentLocation: d['currentLocation'] as String? ?? '',
+      dispatchLocation: d['dispatchLocation'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> _teamToMap(ReliefTeam team) => {
+    'name': team.name,
+    'lead': team.lead,
+    'members': team.members,
+    'responseArea': team.responseArea,
+    'status': team.status,
+    'currentLocation': team.currentLocation,
+    'dispatchLocation': team.dispatchLocation,
+  };
 
   ReliefStock _stockFromMap(Map<String, dynamic> d) {
     // New dynamic format.
@@ -520,13 +568,7 @@ class FirebaseDataRepository implements DataRepository {
     final teams = _db.collection('relief_teams');
     if (await _isEmpty(teams)) {
       for (final t in SeedData.initialTeams()) {
-        await teams.doc(t.id).set({
-          'name': t.name,
-          'lead': t.lead,
-          'members': t.members,
-          'assignedShelterId': t.assignedShelterId,
-          'status': t.status,
-        });
+        await teams.doc(t.id).set(_teamToMap(t));
       }
     }
 
