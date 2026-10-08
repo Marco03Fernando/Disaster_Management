@@ -11,6 +11,7 @@ abstract class DataRepository {
   Stream<List<HazardWarning>> watchWarnings();
   Future<String> issueWarning(HazardWarning warning);
   Future<void> updateWarning(HazardWarning warning);
+  
   Stream<List<Shelter>> watchShelters();
   Future<String> registerShelter(Shelter shelter);
   Future<void> updateShelter(Shelter shelter);
@@ -18,7 +19,12 @@ abstract class DataRepository {
   Future<void> updateShelterOccupancy(String shelterId, int occupancy);
 
   Future<List<ReliefTeam>> getReliefTeams();
+
   Future<List<ReliefStock>> getReliefStock();
+  Future<String> addReliefStock(ReliefStock stock);
+  Future<void> updateReliefStock(ReliefStock stock);
+  Future<void> deleteReliefStock(String district);
+
   Future<List<PostEventReport>> getPostEventReports();
   Future<PostEventReport?> getPostEventReport(String id);
 

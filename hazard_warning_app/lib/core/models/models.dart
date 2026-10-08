@@ -401,15 +401,26 @@ class ReliefTeam {
 class ReliefStock {
   const ReliefStock({
     required this.district,
-    required this.foodUnits,
-    required this.waterUnits,
-    required this.medicineUnits,
-  });
+    Map<String, int>? items,
+    int? foodUnits,
+    int? waterUnits,
+    int? medicineUnits,
+  }) : items = items ??
+            const {
+              'Food': 0,
+              'Water': 0,
+              'Medicine': 0,
+            };
 
   final String district;
-  final int foodUnits;
-  final int waterUnits;
-  final int medicineUnits;
+
+  final Map<String, int> items;
+
+  int get foodUnits => items['Food'] ?? 0;
+
+  int get waterUnits => items['Water'] ?? 0;
+
+  int get medicineUnits => items['Medicine'] ?? 0;
 }
 
 class PostEventReport {

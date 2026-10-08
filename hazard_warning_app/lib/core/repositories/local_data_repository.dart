@@ -10,12 +10,14 @@ class LocalDataRepository implements DataRepository {
     _shelters.addAll(SeedData.initialShelters());
     _warnings.addAll(SeedData.initialWarnings());
     _postEvents.add(SeedData.kelaniFloodReport());
+    _reliefStock.addAll(SeedData.initialRelief());
   }
 
   final _reports = <HazardReport>[];
   final _warnings = <HazardWarning>[];
   final _shelters = <Shelter>[];
   final _postEvents = <PostEventReport>[];
+  final List<ReliefStock> _reliefStock = [];
 
   final _reportsCtrl = StreamController<List<HazardReport>>.broadcast();
   final _warningsCtrl = StreamController<List<HazardWarning>>.broadcast();
@@ -160,7 +162,31 @@ class LocalDataRepository implements DataRepository {
   Future<List<ReliefTeam>> getReliefTeams() async => SeedData.initialTeams();
 
   @override
-  Future<List<ReliefStock>> getReliefStock() async => SeedData.initialRelief();
+  Future<List<ReliefStock>> getReliefStock() async {
+    return List.unmodifiable(_reliefStock);
+  }
+
+  @override
+  Future<String> addReliefStock(ReliefStock stock) async {
+    _reliefStock.add(stock);
+    return stock.district;
+  }
+
+  @override
+  Future<void> updateReliefStock(ReliefStock stock) async {
+    final index = _reliefStock.indexWhere(
+      (item) => item.district == stock.district,
+    );
+
+    if (index < 0) return;
+
+    _reliefStock[index] = stock;
+  }
+
+  @override
+  Future<void> deleteReliefStock(String district) async {
+    _reliefStock.removeWhere((item) => item.district == district);
+  }
 
   @override
   Future<List<PostEventReport>> getPostEventReports() async =>
