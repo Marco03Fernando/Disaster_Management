@@ -27,7 +27,7 @@ class SheltersListScreen extends StatelessWidget {
             ),
 
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -39,52 +39,67 @@ class SheltersListScreen extends StatelessWidget {
             ),
 
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: shelters.length,
-                itemBuilder: (context, index) {
-                  final shelter = shelters[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      title: Text(shelter.name),
-                      subtitle: Text(
-                        '${shelter.occupancy} / ${shelter.capacity} occupants',
-                      ),
-
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (shelter.isOverCapacity)
-                            const StatusBadge(
-                              label: 'Over capacity',
-                              color: AppColors.severityHigh,
+              child: shelters.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.home_work_outlined,
+                              size: 56,
                             ),
-
-                          IconButton(
-                            tooltip: 'Edit shelter',
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () {
-                              _showEditShelterDialog(context, shelter);
-                            },
-                          ),
-
-                          IconButton(
-                            tooltip: 'Delete shelter',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () {
-                              _confirmDeleteShelter(context, shelter);
-                            },
-                          ),
-                        ],
+                            SizedBox(height: 12),
+                            Text(
+                              'No shelters registered yet.',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Register a shelter to start managing occupancy.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(
+                        20,
+                        0,
+                        20,
+                        20,
+                      ),
+                      itemCount: shelters.length,
+                      itemBuilder: (context, index) {
+                        final shelter = shelters[index];
 
-                      onTap: () =>
-                          context.push('/officer/shelters/${shelter.id}'),
+                        return _ShelterCard(
+                          shelter: shelter,
+                          onEdit: () {
+                            _showEditShelterDialog(
+                              context,
+                              shelter,
+                            );
+                          },
+                          onDelete: () {
+                            _confirmDeleteShelter(
+                              context,
+                              shelter,
+                            );
+                          },
+                          onTap: () {
+                            context.push(
+                              '/officer/shelters/${shelter.id}',
+                            );
+                          },
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -93,11 +108,337 @@ class SheltersListScreen extends StatelessWidget {
   }
 }
 
-Future<void> _showRegisterShelterDialog(BuildContext context) async {
+class _ShelterCard extends StatelessWidget {
+  const _ShelterCard({
+    required this.shelter,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onTap,
+  });
+
+  final Shelter shelter;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onTap;
+
+  double get fillRatio {
+    if (shelter.capacity <= 0) return 0;
+
+    return (shelter.occupancy / shelter.capacity)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
+  Color get occupancyColor {
+    if (shelter.isOverCapacity) {
+      return AppColors.severityHigh;
+    }
+
+    if (fillRatio >= 0.8) {
+      return const Color(0xFFF59E0B);
+    }
+
+    return const Color(0xFF16A34A);
+  }
+
+  String get occupancyLabel {
+    if (shelter.isOverCapacity) {
+      return 'Over capacity';
+    }
+
+    if (fillRatio >= 0.8) {
+      return 'Nearly full';
+    }
+
+    return 'Available capacity';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.lightBlueChip,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.home_work_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          shelter.name,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          shelter.district,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Colors.grey.shade700,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Edit shelter',
+                    onPressed: onEdit,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete shelter',
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                    ),
+                    color: Colors.red,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 14),
+
+              // Occupancy section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: occupancyColor.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: occupancyColor.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.people_outline,
+                          size: 19,
+                          color: occupancyColor,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Occupancy',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${shelter.occupancy} / ${shelter.capacity}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: occupancyColor,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 9),
+
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: fillRatio,
+                        minHeight: 8,
+                        backgroundColor:
+                            occupancyColor.withValues(alpha: 0.12),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(
+                          occupancyColor,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Row(
+                      children: [
+                        Text(
+                          occupancyLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: occupancyColor,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (shelter.isOverCapacity)
+                          StatusBadge(
+                            label: 'Over capacity',
+                            color: AppColors.severityHigh,
+                          )
+                        else
+                          Text(
+                            '${shelter.capacity - shelter.occupancy} spaces remaining',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 13),
+
+              // Address
+              _ShelterInfoRow(
+                icon: Icons.location_on_outlined,
+                label: 'Location',
+                value: shelter.address,
+              ),
+
+              // Alternative shelter
+              if (shelter.nearestAlternativeId != null)
+                _ShelterInfoRow(
+                  icon: Icons.alt_route_outlined,
+                  label: 'Alternative',
+                  value: _getAlternativeShelterName(
+                    context,
+                    shelter.nearestAlternativeId!,
+                  ),
+                ),
+
+              const SizedBox(height: 5),
+
+              // Tap hint
+              Row(
+                children: [
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'View shelter details',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getAlternativeShelterName(
+    BuildContext context,
+    String alternativeId,
+  ) {
+    final shelters = context.read<AppState>().shelters;
+
+    final alternative = shelters.firstWhere(
+      (shelter) => shelter.id == alternativeId,
+      orElse: () => Shelter(
+        id: '',
+        name: 'Alternative shelter',
+        district: '',
+        address: '',
+        capacity: 0,
+        occupancy: 0,
+      ),
+    );
+
+    return alternative.name.isEmpty
+        ? 'Alternative shelter'
+        : alternative.name;
+  }
+}
+
+class _ShelterInfoRow extends StatelessWidget {
+  const _ShelterInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+          ),
+          const SizedBox(width: 9),
+          SizedBox(
+            width: 85,
+            child: Text(
+              label,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _showRegisterShelterDialog(
+  BuildContext context,
+) async {
   final nameController = TextEditingController();
   final districtController = TextEditingController();
   final addressController = TextEditingController();
   final capacityController = TextEditingController();
+
   String? nearestAlternativeId;
 
   await showDialog(
@@ -120,13 +461,13 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: districtController,
-                    decoration: const InputDecoration(labelText: 'District'),
+                    decoration: const InputDecoration(
+                      labelText: 'District',
+                    ),
                   ),
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: addressController,
                     decoration: const InputDecoration(
@@ -134,15 +475,14 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: capacityController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Capacity'),
+                    decoration: const InputDecoration(
+                      labelText: 'Capacity',
+                    ),
                   ),
-
                   const SizedBox(height: 12),
-
                   DropdownButtonFormField<String>(
                     initialValue: nearestAlternativeId,
                     decoration: const InputDecoration(
@@ -150,11 +490,11 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                     ),
                     items: [
                       ...context.read<AppState>().shelters.map(
-                        (shelter) => DropdownMenuItem<String>(
-                          value: shelter.id,
-                          child: Text(shelter.name),
-                        ),
-                      ),
+                            (shelter) => DropdownMenuItem<String>(
+                              value: shelter.id,
+                              child: Text(shelter.name),
+                            ),
+                          ),
                     ],
                     onChanged: (value) {
                       setState(() {
@@ -167,7 +507,9 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
             ),
             actions: [
               TextButton(
-                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                onPressed: saving
+                    ? null
+                    : () => Navigator.pop(dialogContext),
                 child: const Text('Cancel'),
               ),
               FilledButton(
@@ -175,8 +517,10 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                     ? null
                     : () async {
                         final name = nameController.text.trim();
-                        final district = districtController.text.trim();
-                        final address = addressController.text.trim();
+                        final district =
+                            districtController.text.trim();
+                        final address =
+                            addressController.text.trim();
                         final capacity = int.tryParse(
                           capacityController.text.trim(),
                         );
@@ -198,13 +542,16 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
 
                         setState(() => saving = true);
 
-                        await context.read<AppState>().registerShelter(
-                          name: name,
-                          district: district,
-                          address: address,
-                          capacity: capacity,
-                          nearestAlternativeId: nearestAlternativeId,
-                        );
+                        await context
+                            .read<AppState>()
+                            .registerShelter(
+                              name: name,
+                              district: district,
+                              address: address,
+                              capacity: capacity,
+                              nearestAlternativeId:
+                                  nearestAlternativeId,
+                            );
 
                         if (dialogContext.mounted) {
                           Navigator.pop(dialogContext);
@@ -213,7 +560,9 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Shelter registered successfully'),
+                              content: Text(
+                                'Shelter registered successfully',
+                              ),
                             ),
                           );
                         }
@@ -222,7 +571,9 @@ Future<void> _showRegisterShelterDialog(BuildContext context) async {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
                       )
                     : const Text('Register'),
               ),
@@ -243,9 +594,15 @@ Future<void> _showEditShelterDialog(
   BuildContext context,
   Shelter shelter,
 ) async {
-  final nameController = TextEditingController(text: shelter.name);
-  final districtController = TextEditingController(text: shelter.district);
-  final addressController = TextEditingController(text: shelter.address);
+  final nameController = TextEditingController(
+    text: shelter.name,
+  );
+  final districtController = TextEditingController(
+    text: shelter.district,
+  );
+  final addressController = TextEditingController(
+    text: shelter.address,
+  );
   final capacityController = TextEditingController(
     text: shelter.capacity.toString(),
   );
@@ -258,8 +615,9 @@ Future<void> _showEditShelterDialog(
       .where((s) => s.id != shelter.id)
       .toList();
 
-  // Prevent an invalid self-reference.
-  if (!alternatives.any((s) => s.id == nearestAlternativeId)) {
+  if (!alternatives.any(
+    (s) => s.id == nearestAlternativeId,
+  )) {
     nearestAlternativeId = null;
   }
 
@@ -272,7 +630,6 @@ Future<void> _showEditShelterDialog(
         builder: (context, setState) {
           return AlertDialog(
             title: const Text('Edit Shelter'),
-
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -283,27 +640,21 @@ Future<void> _showEditShelterDialog(
                       labelText: 'Shelter name',
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: districtController,
                     decoration: const InputDecoration(
                       labelText: 'District',
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: addressController,
                     decoration: const InputDecoration(
                       labelText: 'Address',
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   TextField(
                     controller: capacityController,
                     keyboardType: TextInputType.number,
@@ -311,9 +662,7 @@ Future<void> _showEditShelterDialog(
                       labelText: 'Capacity',
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
                   DropdownButtonFormField<String>(
                     initialValue: nearestAlternativeId,
                     decoration: const InputDecoration(
@@ -340,7 +689,6 @@ Future<void> _showEditShelterDialog(
                 ],
               ),
             ),
-
             actions: [
               TextButton(
                 onPressed: saving
@@ -348,13 +696,13 @@ Future<void> _showEditShelterDialog(
                     : () => Navigator.pop(dialogContext),
                 child: const Text('Cancel'),
               ),
-
               FilledButton(
                 onPressed: saving
                     ? null
                     : () async {
-                        final capacity =
-                            int.tryParse(capacityController.text.trim());
+                        final capacity = int.tryParse(
+                          capacityController.text.trim(),
+                        );
 
                         if (nameController.text.trim().isEmpty ||
                             districtController.text.trim().isEmpty ||
@@ -382,7 +730,8 @@ Future<void> _showEditShelterDialog(
                           address: addressController.text.trim(),
                           capacity: capacity,
                           occupancy: shelter.occupancy,
-                          nearestAlternativeId: nearestAlternativeId,
+                          nearestAlternativeId:
+                              nearestAlternativeId,
                         );
 
                         await context
@@ -438,11 +787,17 @@ Future<void> _confirmDeleteShelter(
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              false,
+            ),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              true,
+            ),
             child: const Text('Delete'),
           ),
         ],
