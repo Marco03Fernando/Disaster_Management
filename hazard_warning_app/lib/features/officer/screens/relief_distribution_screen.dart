@@ -41,7 +41,7 @@ class _ReliefDistributionScreenState
     final fmt = NumberFormat.decimalPattern();
 
     return OfficerCoordinationScaffold(
-      currentIndex: 2,
+      currentIndex: 3,
       body: SafeArea(
         child: FutureBuilder<List<ReliefStock>>(
           future: _stockFuture,

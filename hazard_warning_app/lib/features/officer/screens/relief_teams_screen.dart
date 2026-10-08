@@ -558,7 +558,7 @@ class _ReliefTeamsScreenState extends State<ReliefTeamsScreen> {
   @override
   Widget build(BuildContext context) {
     return OfficerCoordinationScaffold(
-      currentIndex: 1,
+      currentIndex: 2,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _findAndDispatchTeam,
         icon: const Icon(Icons.local_shipping_outlined),

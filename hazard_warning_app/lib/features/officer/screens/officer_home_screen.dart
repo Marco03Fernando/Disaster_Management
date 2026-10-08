@@ -107,7 +107,7 @@ class OfficerHomeScreen extends StatelessWidget {
               title: 'Coordinate shelters & relief',
               subtitle: 'Occupancy, teams, and stock levels',
               icon: Icons.home_work_outlined,
-              onTap: () => context.push('/officer/shelters'),
+              onTap: () => context.push('/officer/overview'),
             ),
             const SizedBox(height: 12),
             _ActionCard(
