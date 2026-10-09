@@ -34,6 +34,9 @@ abstract class DataRepository {
   Future<void> updateShelterOccupancy(String shelterId, int occupancy);
 
   Future<List<ReliefTeam>> getReliefTeams();
+  Future<String> addReliefTeam(ReliefTeam team);
+  Future<void> updateReliefTeam(ReliefTeam team);
+  Future<void> deleteReliefTeam(String teamId); 
 
   Future<List<ReliefStock>> getReliefStock();
   Future<String> addReliefStock(ReliefStock stock);

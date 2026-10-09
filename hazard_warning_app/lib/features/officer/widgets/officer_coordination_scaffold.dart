@@ -7,31 +7,38 @@ class OfficerCoordinationScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.currentIndex = 0,
+    this.floatingActionButton,
   });
 
   final Widget body;
   final int currentIndex;
+  final Widget? floatingActionButton;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: body,
+      floatingActionButton: floatingActionButton,
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
           switch (index) {
             case 0:
-              context.go('/officer/shelters');
-            case 1:
-              context.go('/officer/teams');
-            case 2:
-              context.go('/officer/relief');
-            case 3:
               context.go('/officer/overview');
+            case 1:
+              context.go('/officer/shelters');
+            case 2:
+              context.go('/officer/teams');
+            case 3:
+              context.go('/officer/relief');
           }
         },
         indicatorColor: AppColors.lightBlueChip,
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart_outlined),
+            label: 'Overview',
+          ),
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
             label: 'Shelters',
@@ -43,10 +50,6 @@ class OfficerCoordinationScaffold extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined),
             label: 'Relief',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            label: 'Overview',
           ),
         ],
       ),
