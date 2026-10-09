@@ -4,9 +4,24 @@ abstract class DataRepository {
   Stream<List<HazardReport>> watchReports();
   Future<List<HazardReport>> getReports();
   Future<HazardReport?> getReport(String id);
-  Future<String> submitReport(HazardReport draft);
-  Future<void> verifyReport(String id);
-  Future<void> rejectReport(String id);
+  Future<String> submitReport(HazardReport draft, {ReporterContact? contact});
+
+  /// Uploads a report's on-device photo and records its download URL.
+  Future<void> uploadReportPhoto(HazardReport report);
+
+  /// Contact details left by the reporter; readable by duty officers only.
+  Future<ReporterContact?> getReporterContact(String reportId);
+
+  /// Marks a pending report CONFIRMED. Throws
+  /// [ReportAlreadyReviewedException] if it is no longer pending.
+  Future<void> verifyReport(String id, {required ReportReviewer reviewer});
+
+  /// Marks a pending report DISMISSED with the officer's [reason].
+  Future<void> rejectReport(
+    String id, {
+    required ReportReviewer reviewer,
+    required String reason,
+  });
 
   Stream<List<HazardWarning>> watchWarnings();
   Future<String> issueWarning(HazardWarning warning);

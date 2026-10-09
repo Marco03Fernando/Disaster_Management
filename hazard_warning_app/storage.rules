@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // UC-02 hazard report photos: hazard_reports/{reporterUid}/{reportId}.jpg
+    match /hazard_reports/{reporterUid}/{fileName} {
+      // Any signed-in app user (anonymous citizens and officers) can view.
+      allow read: if request.auth != null;
+      // Only the reporter can upload, images only, up to 10 MB, no overwrite.
+      allow create: if request.auth != null
+        && request.auth.uid == reporterUid
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+  }
+}

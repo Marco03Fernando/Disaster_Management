@@ -13,7 +13,6 @@ import 'package:hazard_warning_app/features/officer/screens/coordination_overvie
 import 'package:hazard_warning_app/features/officer/screens/issue_warning_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/issued_warnings_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/officer_home_screen.dart';
-import 'package:hazard_warning_app/features/officer/screens/pending_reports_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/post_event_report_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/post_event_reports_list_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/relief_distribution_screen.dart';
@@ -21,8 +20,9 @@ import 'package:hazard_warning_app/features/officer/screens/relief_teams_screen.
 import 'package:hazard_warning_app/features/officer/screens/select_report_for_warning_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/shelter_detail_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/shelters_list_screen.dart';
-import 'package:hazard_warning_app/features/officer/screens/verify_report_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/warning_delivery_screen.dart';
+import 'package:hazard_warning_app/features/report_verification/screens/report_review_dashboard_screen.dart';
+import 'package:hazard_warning_app/features/report_verification/screens/report_review_detail_screen.dart';
 import 'package:hazard_warning_app/features/role_selection/role_selection_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/rescue_team_leader_screen.dart';
 
@@ -103,12 +103,12 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: '/officer/reports/pending',
-        builder: (context, state) => const PendingReportsScreen(),
+        builder: (context, state) => const ReportReviewDashboardScreen(),
       ),
       GoRoute(
         path: '/officer/reports/:id/verify',
         builder: (context, state) =>
-            VerifyReportScreen(reportId: state.pathParameters['id']!),
+            ReportReviewDetailScreen(reportId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/officer/warnings',

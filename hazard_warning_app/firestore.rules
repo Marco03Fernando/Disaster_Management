@@ -1,11 +1,128 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DEVELOPMENT ONLY: the demo app has no sign-in, so every client can read
-    // and write. Replace with officer/citizen role rules (Firebase Auth +
-    // custom claims) before any real deployment.
-    match /{document=**} {
-      allow read, write: if true;
+
+    // ---------------------------------------------------------------------
+    // Shared helpers
+    // ---------------------------------------------------------------------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Duty officers: a non-anonymous Firebase Auth user with an
+    // officers/{uid} document whose `active` is true. That document can only
+    // be created in the Firebase Console / Admin SDK (client writes denied).
+    function isOfficer() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && exists(/databases/$(database)/documents/officers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/officers/$(request.auth.uid)).data.active == true;
+    }
+
+    // ---------------------------------------------------------------------
+    // UC-02 — Hazard reports and officer verification
+    // ---------------------------------------------------------------------
+    match /officers/{uid} {
+      // An officer may read their own access record; nobody can grant
+      // themselves (or anyone else) officer access from a client.
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /hazard_reports/{reportId} {
+      function reportFields() {
+        return ['category', 'areaLabel', 'locationLabel', 'latitude',
+                'longitude', 'status', 'submittedAt', 'photoPath', 'photoUrl',
+                'photoPending', 'notes', 'syncState', 'reporterUid',
+                'verifiedAt', 'verifiedBy'];
+      }
+
+      function optionalString(data, field, maxLen) {
+        return !(field in data) || data[field] == null
+          || (data[field] is string && data[field].size() <= maxLen);
+      }
+
+      // Officers (UC-02) and the warning flow (UC-01) read every report;
+      // citizens read reports too (the app filters to their own). Reporter
+      // contact details are NOT here — see the private subcollection below.
+      allow read: if signedIn();
+
+      // Citizens create PENDING reports under their own UID and cannot
+      // pre-fill any verification fields.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(reportFields())
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.category is string
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.submittedAt is timestamp
+        && request.resource.data.get('verifiedAt', null) == null
+        && request.resource.data.get('verifiedBy', null) == null
+        && request.resource.data.get('photoUrl', null) == null
+        && optionalString(request.resource.data, 'notes', 1000)
+        && optionalString(request.resource.data, 'locationLabel', 200);
+
+      // The reporter may attach the uploaded photo URL while still pending.
+      allow update: if signedIn()
+        && resource.data.get('reporterUid', null) == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['photoUrl', 'photoPending'])
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoPending == false;
+
+      // Officer verification: only PENDING -> CONFIRMED ('verified') or
+      // DISMISSED ('rejected'), exactly once, stamped with the officer's UID
+      // and the server time. Dismissal requires a reason (10–500 chars).
+      allow update: if isOfficer()
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'verifiedAt', 'verifiedBy', 'verifiedByUid',
+                       'dismissalReason'])
+        && request.resource.data.verifiedByUid == request.auth.uid
+        && request.resource.data.verifiedAt == request.time
+        && request.resource.data.verifiedBy is string
+        && request.resource.data.verifiedBy.size() <= 120
+        && (
+          (request.resource.data.status == 'verified'
+            && !('dismissalReason' in request.resource.data))
+          ||
+          (request.resource.data.status == 'rejected'
+            && request.resource.data.dismissalReason is string
+            && request.resource.data.dismissalReason.size() >= 10
+            && request.resource.data.dismissalReason.size() <= 500)
+        );
+
+      allow delete: if false;
+
+      // Reporter contact details: visible to duty officers and the reporter.
+      match /private/{docId} {
+        allow read: if isOfficer()
+          || (signedIn() && resource.data.reporterUid == request.auth.uid);
+        allow create: if signedIn()
+          && docId == 'reporter'
+          && request.resource.data.keys().hasOnly(['reporterUid', 'name', 'phone'])
+          && request.resource.data.reporterUid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/hazard_reports/$(reportId))
+               .data.reporterUid == request.auth.uid
+          && (request.resource.data.name == null
+              || (request.resource.data.name is string && request.resource.data.name.size() <= 80))
+          && (request.resource.data.phone == null
+              || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20));
+        allow update, delete: if false;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // DEVELOPMENT ONLY (unchanged for other features): the remaining
+    // collections are still open. UC-02 collections are excluded so the
+    // rules above cannot be bypassed — Firestore ORs every matching rule.
+    // Replace with officer/citizen role rules before any real deployment.
+    // ---------------------------------------------------------------------
+    match /{collection}/{document=**} {
+      allow read, write: if collection != 'hazard_reports'
+        && collection != 'officers';
     }
   }
 }

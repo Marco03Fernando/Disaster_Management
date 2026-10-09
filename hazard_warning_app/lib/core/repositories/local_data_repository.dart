@@ -19,7 +19,9 @@ class LocalDataRepository implements DataRepository {
   final _shelters = <Shelter>[];
   final _postEvents = <PostEventReport>[];
   final List<ReliefStock> _reliefStock = [];
-  final List<ReliefTeam> _reliefTeams = [];
+  
+final _contacts = <String, ReporterContact>{};
+final List<ReliefTeam> _reliefTeams
 
   final _reportsCtrl = StreamController<List<HazardReport>>.broadcast();
   final _warningsCtrl = StreamController<List<HazardWarning>>.broadcast();
@@ -48,31 +50,73 @@ class LocalDataRepository implements DataRepository {
   }
 
   @override
-  Future<String> submitReport(HazardReport draft) async {
+  Future<String> submitReport(
+    HazardReport draft, {
+    ReporterContact? contact,
+  }) async {
     _reports.insert(0, draft);
+    if (contact != null && !contact.isEmpty) _contacts[draft.id] = contact;
     _emitReports();
     return draft.id;
   }
 
+  /// Demo mode has no cloud storage; the on-device photo path is kept as is.
   @override
-  Future<void> verifyReport(String id) async {
-    final index = _reports.indexWhere((r) => r.id == id);
-    if (index < 0) return;
+  Future<void> uploadReportPhoto(HazardReport report) async {}
+
+  @override
+  Future<ReporterContact?> getReporterContact(String reportId) async =>
+      _contacts[reportId];
+
+  @override
+  Future<void> verifyReport(
+    String id, {
+    required ReportReviewer reviewer,
+  }) async {
+    final index = _pendingIndex(id);
     _reports[index] = _reports[index].copyWith(
       status: ReportStatus.verified,
       verifiedAt: DateTime.now(),
-      verifiedBy: 'Duty officer',
+      verifiedBy: reviewer.displayName,
+      verifiedByUid: reviewer.uid,
       syncState: SyncState.synced,
     );
     _emitReports();
   }
 
   @override
-  Future<void> rejectReport(String id) async {
-    final index = _reports.indexWhere((r) => r.id == id);
-    if (index < 0) return;
-    _reports[index] = _reports[index].copyWith(status: ReportStatus.rejected);
+  Future<void> rejectReport(
+    String id, {
+    required ReportReviewer reviewer,
+    required String reason,
+  }) async {
+    final trimmed = reason.trim();
+    if (trimmed.length < ReportReviewRules.minDismissalReasonLength) {
+      throw ArgumentError.value(reason, 'reason', 'Dismissal reason too short');
+    }
+    final index = _pendingIndex(id);
+    _reports[index] = _reports[index].copyWith(
+      status: ReportStatus.rejected,
+      verifiedAt: DateTime.now(),
+      verifiedBy: reviewer.displayName,
+      verifiedByUid: reviewer.uid,
+      dismissalReason: trimmed,
+      syncState: SyncState.synced,
+    );
     _emitReports();
+  }
+
+  int _pendingIndex(String id) {
+    final index = _reports.indexWhere((r) => r.id == id);
+    if (index < 0) throw StateError('Report $id not found');
+    final current = _reports[index];
+    if (current.status != ReportStatus.pending) {
+      throw ReportAlreadyReviewedException(
+        current.status,
+        reviewedBy: current.verifiedBy,
+      );
+    }
+    return index;
   }
 
   @override
