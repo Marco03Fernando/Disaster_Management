@@ -52,6 +52,19 @@ class RoleSelectionScreen extends StatelessWidget {
                       context.go('/officer/home');
                     },
                   ),
+
+                  const SizedBox(height: 14),
+                  _RoleCard(
+                    title: 'Rescue Team Leader',
+                    subtitle:
+                        'View your assigned team and update rescue operations',
+                    icon: Icons.groups_outlined,
+                    accent: AppColors.primaryBlue,
+                    onTap: () {
+                      context.go('/officer/rescue-team-leader');
+                    },
+                  ),
+
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
