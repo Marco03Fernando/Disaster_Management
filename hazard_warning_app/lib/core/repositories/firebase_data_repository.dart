@@ -1,14 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hazard_warning_app/core/data/seed_data.dart';
 import 'package:hazard_warning_app/core/models/models.dart';
 import 'package:hazard_warning_app/core/repositories/data_repository.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// Firestore-backed repository. Collections are created on first write.
 class FirebaseDataRepository implements DataRepository {
-  FirebaseDataRepository({FirebaseFirestore? firestore})
+  FirebaseDataRepository({FirebaseFirestore? firestore, this._storage})
     : _db = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _db;
+  final FirebaseStorage? _storage;
 
   CollectionReference<Map<String, dynamic>> get _reports =>
       _db.collection('hazard_reports');
@@ -19,11 +23,13 @@ class FirebaseDataRepository implements DataRepository {
   CollectionReference<Map<String, dynamic>> get _postEvents =>
       _db.collection('post_event_reports');
 
+  /// Includes metadata changes so a report written offline flips from
+  /// "queued" to "synced" as soon as the server acknowledges it.
   @override
   Stream<List<HazardReport>> watchReports() {
     return _reports
         .orderBy('submittedAt', descending: true)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snap) => snap.docs.map(_reportFromDoc).toList());
   }
 
@@ -40,25 +46,97 @@ class FirebaseDataRepository implements DataRepository {
     return _reportFromDoc(doc);
   }
 
+  /// Reporter contact details live in `hazard_reports/{id}/private/reporter`
+  /// so security rules can hide them from everyone except duty officers.
+  DocumentReference<Map<String, dynamic>> _contactDoc(String reportId) =>
+      _reports.doc(reportId).collection('private').doc('reporter');
+
   @override
-  Future<String> submitReport(HazardReport draft) async {
-    await _reports.doc(draft.id).set(_reportToMap(draft));
+  Future<String> submitReport(
+    HazardReport draft, {
+    ReporterContact? contact,
+  }) async {
+    final batch = _db.batch()..set(_reports.doc(draft.id), _reportToMap(draft));
+    if (contact != null && !contact.isEmpty) {
+      batch.set(_contactDoc(draft.id), {
+        'reporterUid': draft.reporterUid,
+        'name': contact.name,
+        'phone': contact.phone,
+      });
+    }
+    await batch.commit();
     return draft.id;
   }
 
   @override
-  Future<void> verifyReport(String id) async {
-    await _reports.doc(id).update({
-      'status': ReportStatus.verified.name,
-      'verifiedAt': FieldValue.serverTimestamp(),
-      'verifiedBy': 'Duty officer',
-      'syncState': SyncState.synced.name,
+  Future<void> uploadReportPhoto(HazardReport report) async {
+    final storage = _storage;
+    final path = report.photoPath;
+    final uid = report.reporterUid;
+    if (storage == null || path == null || uid == null) return;
+    final bytes = await XFile(path).readAsBytes();
+    final ref = storage.ref('hazard_reports/$uid/${report.id}.jpg');
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+    final url = await ref.getDownloadURL();
+    await _reports.doc(report.id).update({
+      'photoUrl': url,
+      'photoPending': false,
     });
   }
 
   @override
-  Future<void> rejectReport(String id) async {
-    await _reports.doc(id).update({'status': ReportStatus.rejected.name});
+  Future<ReporterContact?> getReporterContact(String reportId) async {
+    final doc = await _contactDoc(reportId).get();
+    final d = doc.data();
+    if (d == null) return null;
+    return ReporterContact(
+      name: d['name'] as String?,
+      phone: d['phone'] as String?,
+    );
+  }
+
+  @override
+  Future<void> verifyReport(String id, {required ReportReviewer reviewer}) {
+    return _review(id, ReportStatus.verified, reviewer);
+  }
+
+  @override
+  Future<void> rejectReport(
+    String id, {
+    required ReportReviewer reviewer,
+    required String reason,
+  }) {
+    return _review(id, ReportStatus.rejected, reviewer, reason: reason.trim());
+  }
+
+  /// Runs in a transaction so two officers cannot both decide the same
+  /// report; the security rules enforce the same pending-only transition.
+  Future<void> _review(
+    String id,
+    ReportStatus decision,
+    ReportReviewer reviewer, {
+    String? reason,
+  }) async {
+    final ref = _reports.doc(id);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final d = snap.data();
+      if (d == null) throw StateError('Report $id not found');
+      final current = ReportStatus.values.byName(d['status'] as String);
+      if (current != ReportStatus.pending) {
+        throw ReportAlreadyReviewedException(
+          current,
+          reviewedBy: d['verifiedBy'] as String?,
+        );
+      }
+      tx.update(ref, {
+        'status': decision.name,
+        'verifiedAt': FieldValue.serverTimestamp(),
+        'verifiedBy': reviewer.displayName,
+        'verifiedByUid': reviewer.uid,
+        'dismissalReason': ?reason,
+      });
+    });
   }
 
   @override
@@ -395,10 +473,17 @@ class FirebaseDataRepository implements DataRepository {
       status: ReportStatus.values.byName(d['status'] as String),
       submittedAt: (d['submittedAt'] as Timestamp).toDate(),
       photoPath: d['photoPath'] as String?,
+      photoUrl: d['photoUrl'] as String?,
+      photoPending: d['photoPending'] as bool? ?? false,
       notes: d['notes'] as String?,
-      syncState: SyncState.values.byName(d['syncState'] as String? ?? 'synced'),
+      syncState: doc.metadata.hasPendingWrites
+          ? SyncState.queued
+          : SyncState.values.byName(d['syncState'] as String? ?? 'synced'),
+      reporterUid: d['reporterUid'] as String?,
       verifiedAt: (d['verifiedAt'] as Timestamp?)?.toDate(),
       verifiedBy: d['verifiedBy'] as String?,
+      verifiedByUid: d['verifiedByUid'] as String?,
+      dismissalReason: d['dismissalReason'] as String?,
     );
   }
 
@@ -411,8 +496,13 @@ class FirebaseDataRepository implements DataRepository {
     'status': report.status.name,
     'submittedAt': Timestamp.fromDate(report.submittedAt),
     'photoPath': report.photoPath,
+    'photoUrl': report.photoUrl,
+    'photoPending': report.photoPending,
     'notes': report.notes,
-    'syncState': report.syncState.name,
+    // Stored copies are synced by definition; "queued" is derived from
+    // pending local writes in [_reportFromDoc].
+    'syncState': SyncState.synced.name,
+    'reporterUid': report.reporterUid,
     'verifiedAt': report.verifiedAt != null
         ? Timestamp.fromDate(report.verifiedAt!)
         : null,
@@ -496,7 +586,13 @@ class FirebaseDataRepository implements DataRepository {
   /// already has documents is left untouched), then loads reference data.
   Future<void> initialize() async {
     await seedSheltersIfEmpty();
-    await seedReportsIfEmpty();
+    try {
+      await seedReportsIfEmpty();
+    } on FirebaseException catch (e) {
+      // Report security rules only let citizens create PENDING reports, so
+      // demo reports in other states cannot be seeded from the client.
+      if (kDebugMode) debugPrint('Skipped seeding hazard reports: ${e.code}');
+    }
 
     if (await _isEmpty(_warnings)) {
       for (final w in SeedData.initialWarnings()) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hazard_warning_app/core/models/models.dart';
 import 'package:hazard_warning_app/core/state/app_state.dart';
 import 'package:hazard_warning_app/core/theme/app_theme.dart';
 import 'package:hazard_warning_app/core/widgets/common_widgets.dart';
@@ -12,7 +13,21 @@ class ReportSubmittedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final online = context.watch<AppState>().online;
+    final state = context.watch<AppState>();
+    final report = state.myReportById(reportId);
+    final failed = report?.syncState == SyncState.failed;
+    // Also "saved on device" when online but the server has not confirmed yet.
+    final online = state.online && report?.syncState != SyncState.queued;
+    final title = failed
+        ? 'Report not sent'
+        : online
+        ? 'Report submitted'
+        : 'Report saved on device';
+    final message = failed
+        ? 'Report $reportId did not reach the DMC. Open My reports to retry.'
+        : online
+        ? 'Report $reportId is pending verification by a duty officer.'
+        : 'Report $reportId will sync automatically when you are back online.';
 
     return Scaffold(
       body: SafeArea(
@@ -24,26 +39,29 @@ class ReportSubmittedScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppColors.lightBlueBg,
+                  color: failed ? AppColors.dangerSoft : AppColors.lightBlueBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.check_rounded,
+                child: Icon(
+                  failed ? Icons.error_outline_rounded : Icons.check_rounded,
                   size: 48,
-                  color: AppColors.primaryBlue,
+                  color: failed
+                      ? AppColors.severityHigh
+                      : AppColors.primaryBlue,
                 ),
               ),
               const SizedBox(height: 24),
-              Text(
-                online ? 'Report submitted' : 'Report saved on device',
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
-                online
-                    ? 'Report $reportId is pending verification by a duty officer.'
-                    : 'Report $reportId will sync automatically when you are back online.',
+                message,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
               ),

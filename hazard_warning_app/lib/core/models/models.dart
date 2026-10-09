@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 enum UserRole { citizen, officer }
@@ -90,6 +92,35 @@ extension HazardOnsetX on HazardCategory {
       'Coastal hazards are sent to the affected coastal districts.',
     HazardCategory.strongWinds => 'Wind systems cover wide areas; choose the district, or a zone for a local gust front.',
   };
+}
+
+/// Officer-facing names for a report's verification state. The stored values
+/// stay `pending` / `verified` / `rejected` because the warning flow (UC-01)
+/// reads `verified`; the UI presents them as PENDING / CONFIRMED / DISMISSED.
+extension ReportStatusX on ReportStatus {
+  String get label => switch (this) {
+    ReportStatus.pending => 'Pending',
+    ReportStatus.verified => 'Confirmed',
+    ReportStatus.rejected => 'Dismissed',
+    ReportStatus.synced => 'Synced',
+  };
+
+  Color get color => switch (this) {
+    ReportStatus.pending => const Color(0xFFF59E0B),
+    ReportStatus.verified => const Color(0xFF16A34A),
+    ReportStatus.rejected => const Color(0xFFB91C1C),
+    ReportStatus.synced => const Color(0xFF2563EB),
+  };
+
+  IconData get icon => switch (this) {
+    ReportStatus.pending => Icons.hourglass_top_rounded,
+    ReportStatus.verified => Icons.verified_outlined,
+    ReportStatus.rejected => Icons.block_rounded,
+    ReportStatus.synced => Icons.cloud_done_outlined,
+  };
+
+  bool get isReviewed =>
+      this == ReportStatus.verified || this == ReportStatus.rejected;
 }
 
 extension WarningLevelX on WarningLevel {
@@ -195,10 +226,15 @@ class HazardReport {
     required this.status,
     required this.submittedAt,
     this.photoPath,
+    this.photoUrl,
+    this.photoPending = false,
     this.notes,
     this.syncState = SyncState.synced,
+    this.reporterUid,
     this.verifiedAt,
     this.verifiedBy,
+    this.verifiedByUid,
+    this.dismissalReason,
   });
 
   final String id;
@@ -208,17 +244,41 @@ class HazardReport {
   final GeoCoordinate coordinates;
   final ReportStatus status;
   final DateTime submittedAt;
+
+  /// Path of the photo on the reporter's device.
   final String? photoPath;
+
+  /// Download URL once the photo is uploaded to Firebase Storage.
+  final String? photoUrl;
+
+  /// True while a photo exists on the device but has not been uploaded yet.
+  final bool photoPending;
   final String? notes;
   final SyncState syncState;
+
+  /// Firebase Auth UID of the citizen who submitted the report.
+  final String? reporterUid;
+
+  /// When the report was confirmed or dismissed, and by whom.
   final DateTime? verifiedAt;
   final String? verifiedBy;
+  final String? verifiedByUid;
+
+  /// Officer's reason, required when the report is dismissed.
+  final String? dismissalReason;
+
+  bool get hasPhoto => photoUrl != null || photoPath != null;
 
   HazardReport copyWith({
     ReportStatus? status,
     SyncState? syncState,
     DateTime? verifiedAt,
     String? verifiedBy,
+    String? verifiedByUid,
+    String? dismissalReason,
+    String? photoUrl,
+    bool? photoPending,
+    String? reporterUid,
   }) {
     return HazardReport(
       id: id,
@@ -229,12 +289,92 @@ class HazardReport {
       status: status ?? this.status,
       submittedAt: submittedAt,
       photoPath: photoPath,
+      photoUrl: photoUrl ?? this.photoUrl,
+      photoPending: photoPending ?? this.photoPending,
       notes: notes,
       syncState: syncState ?? this.syncState,
+      reporterUid: reporterUid ?? this.reporterUid,
       verifiedAt: verifiedAt ?? this.verifiedAt,
       verifiedBy: verifiedBy ?? this.verifiedBy,
+      verifiedByUid: verifiedByUid ?? this.verifiedByUid,
+      dismissalReason: dismissalReason ?? this.dismissalReason,
     );
   }
+}
+
+/// Optional contact details a citizen leaves with a report. Stored apart from
+/// the report so only duty officers (and the reporter) can read them.
+class ReporterContact {
+  const ReporterContact({this.name, this.phone});
+
+  final String? name;
+  final String? phone;
+
+  bool get isEmpty =>
+      (name == null || name!.isEmpty) && (phone == null || phone!.isEmpty);
+}
+
+/// The signed-in duty officer recorded on a verification decision.
+class ReportReviewer {
+  const ReportReviewer({required this.uid, required this.displayName});
+
+  final String uid;
+  final String displayName;
+}
+
+/// Limits shared by the dismissal form, repositories and Firestore rules.
+class ReportReviewRules {
+  static const minDismissalReasonLength = 10;
+  static const maxDismissalReasonLength = 500;
+}
+
+/// Thrown when an officer tries to review a report that is no longer pending
+/// (for example, another officer decided it first).
+class ReportAlreadyReviewedException implements Exception {
+  const ReportAlreadyReviewedException(this.status, {this.reviewedBy});
+
+  final ReportStatus status;
+  final String? reviewedBy;
+
+  @override
+  String toString() =>
+      'This report was already ${status.label.toLowerCase()}'
+      '${reviewedBy == null ? '' : ' by $reviewedBy'}.';
+}
+
+/// Thrown when a citizen report cannot be stamped with the device's account
+/// (e.g. first launch while offline), so the server would reject it.
+class CitizenSessionUnavailableException implements Exception {
+  const CitizenSessionUnavailableException();
+
+  @override
+  String toString() =>
+      "Couldn't connect this phone to the reporting service yet. Connect to "
+      'the internet and try again. Your report is still on this screen.';
+}
+
+const _reportIdAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/// Collision-resistant report ID, e.g. `GR-MG1X2ABC-K7QZ`. Keeps the `GR-`
+/// prefix of existing reports; time first so IDs sort by creation.
+String newReportId({DateTime? now, math.Random? random}) {
+  final rng = random ?? math.Random.secure();
+  final time = (now ?? DateTime.now()).millisecondsSinceEpoch
+      .toRadixString(36)
+      .toUpperCase();
+  final suffix = List.generate(
+    4,
+    (_) => _reportIdAlphabet[rng.nextInt(_reportIdAlphabet.length)],
+  ).join();
+  return 'GR-$time-$suffix';
+}
+
+/// Thrown when a verification is attempted without an authorized officer.
+class OfficerNotAuthorizedException implements Exception {
+  const OfficerNotAuthorizedException();
+
+  @override
+  String toString() => 'Only signed-in duty officers can verify reports.';
 }
 
 /// Gateway outcome for one channel of one warning broadcast.
