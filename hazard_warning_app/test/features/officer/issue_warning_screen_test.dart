@@ -45,7 +45,7 @@ void main() {
         (tester) async {
       await openForm(tester, 'GR-2481');
 
-      expect(find.text('ESTIMATED RECIPIENTS'), findsOneWidget);
+      expect(find.textContaining('citizens registered in'), findsOneWidget);
       expect(find.text('12,480'), findsOneWidget);
       expect(find.text('citizens registered in Kelani river basin'),
           findsOneWidget);
@@ -358,7 +358,7 @@ void main() {
 
       expect(find.text('No citizens in this area'), findsOneWidget);
       expect(find.textContaining('no alert will be sent'), findsOneWidget);
-      expect(find.text('ESTIMATED RECIPIENTS'), findsNothing);
+      expect(find.textContaining('citizens registered in'), findsNothing);
     });
 
     testWidgets('review reports an empty list and dispatches nothing',

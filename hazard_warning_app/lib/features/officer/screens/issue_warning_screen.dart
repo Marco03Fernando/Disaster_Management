@@ -276,45 +276,29 @@ class _RecipientPreview extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: AppColors.heroGradient,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: AppColors.lightBlueBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.lightBlueChip),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ESTIMATED RECIPIENTS',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.75),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.9,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
             fmt.format(count),
             style: const TextStyle(
-              fontSize: 40,
-              height: 1,
+              fontSize: 36,
+              height: 1.1,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -1,
+              color: AppColors.navy,
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             'citizens registered in $area',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
+            style: const TextStyle(color: AppColors.primaryBlue, fontSize: 14),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -387,21 +371,21 @@ class _ChannelChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+        border: Border.all(color: AppColors.lightBlueChip),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(channel.icon, size: 16, color: Colors.white),
+          Icon(channel.icon, size: 16, color: AppColors.primaryBlue),
           const SizedBox(width: 6),
           Text(
             channel.shortLabel,
             style: const TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 13,
-              color: Colors.white,
+              color: AppColors.primaryBlue,
             ),
           ),
         ],
