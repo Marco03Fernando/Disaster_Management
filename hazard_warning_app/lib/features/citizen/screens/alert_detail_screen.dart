@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hazard_warning_app/core/models/models.dart';
 import 'package:hazard_warning_app/core/state/app_state.dart';
 import 'package:hazard_warning_app/core/widgets/common_widgets.dart';
 import 'package:intl/intl.dart';
@@ -13,10 +14,7 @@ class AlertDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alerts = context.watch<AppState>().alerts;
-    final alert = alerts
-        .where((a) => a.warningId == warningId)
-        .cast()
-        .firstOrNull;
+    final alert = alerts.where((a) => a.warningId == warningId).firstOrNull;
     final fmt = DateFormat('d MMM yyyy · HH:mm');
 
     if (alert == null) {
