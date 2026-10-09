@@ -36,10 +36,11 @@ class SelectReportForWarningScreen extends StatelessWidget {
                   ? const _EmptyState()
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                      itemCount: reports.length + 1,
+                      itemCount: reports.length + 2,
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (context, index) {
-                        if (index == 0) {
+                        if (index == 0) return const _IntroBanner();
+                        if (index == 1) {
                           return FieldLabel(
                             'Awaiting a warning',
                             trailing: StatusBadge(
@@ -48,12 +49,47 @@ class SelectReportForWarningScreen extends StatelessWidget {
                             ),
                           );
                         }
-                        return _ReportCard(report: reports[index - 1]);
+                        return _ReportCard(report: reports[index - 2]);
                       },
                     ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _IntroBanner extends StatelessWidget {
+  const _IntroBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.lightBlueBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.lightBlueChip),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            size: 20,
+            color: AppColors.accentBlue,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Official warnings start from a checked report. '
+              'Each report can have one warning; reports verified most recently are shown first.',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AppColors.primaryBlue, height: 1.35),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -68,69 +104,134 @@ class _ReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = DateFormat('d MMM · HH:mm');
     final verified = report.verifiedAt ?? report.submittedAt;
+    final rapid = report.category.isRapidOnset;
+    final tone = rapid ? AppColors.severityHigh : AppColors.accentBlue;
+    final onset = report.category.onsetLabel.split(' · ').first;
 
     return AppCard(
+      padding: EdgeInsets.zero,
       onTap: () => context.push('/officer/warnings/issue/${report.id}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconBadge(
-                icon: report.category.icon,
-                color: AppColors.accentBlue,
-                size: 52,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 5,
+              decoration: BoxDecoration(
+                color: tone,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(18),
+                ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      report.category.label,
-                      style: Theme.of(context).textTheme.titleMedium,
+                    Row(
+                      children: [
+                        IconBadge(
+                          icon: report.category.icon,
+                          color: tone,
+                          size: 52,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                report.category.label,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.place_outlined,
+                                    size: 14,
+                                    color: AppColors.textGrey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      report.locationLabel,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      report.locationLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        StatusBadge(label: onset, color: tone),
+                        Text(
+                          report.id,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.verified_outlined,
+                              size: 14,
+                              color: AppColors.successGreen,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Verified ${fmt.format(verified)}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: AppColors.borderGrey),
+                    const SizedBox(height: 10),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Create warning',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.accentBlue,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 16,
+                          color: AppColors.accentBlue,
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.textGrey,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                report.id,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: AppColors.primaryBlue,
-                ),
-              ),
-              const Text('  ·  ', style: TextStyle(color: AppColors.textGrey)),
-              const Icon(
-                Icons.verified_outlined,
-                size: 14,
-                color: AppColors.successGreen,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'Verified ${fmt.format(verified)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
