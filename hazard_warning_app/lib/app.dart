@@ -24,6 +24,7 @@ import 'package:hazard_warning_app/features/officer/screens/shelters_list_screen
 import 'package:hazard_warning_app/features/officer/screens/verify_report_screen.dart';
 import 'package:hazard_warning_app/features/officer/screens/warning_delivery_screen.dart';
 import 'package:hazard_warning_app/features/role_selection/role_selection_screen.dart';
+import 'package:hazard_warning_app/features/officer/screens/rescue_team_leader_screen.dart';
 
 class HazardWarningApp extends StatelessWidget {
   const HazardWarningApp({super.key, required this.router});
@@ -140,6 +141,10 @@ GoRouter buildRouter() {
       GoRoute(
         path: '/officer/teams',
         builder: (context, state) => const ReliefTeamsScreen(),
+      ),
+      GoRoute(
+        path: '/officer/rescue-team-leader',
+        builder: (context, state) => const RescueTeamLeaderScreen(),
       ),
       GoRoute(
         path: '/officer/relief',

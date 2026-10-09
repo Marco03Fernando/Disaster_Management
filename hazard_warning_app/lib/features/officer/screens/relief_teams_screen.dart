@@ -334,7 +334,7 @@ class _ReliefTeamsScreenState extends State<ReliefTeamsScreen> {
                             child: ListView.separated(
                               shrinkWrap: true,
                               itemCount: matchingTeams.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (_, _) =>
                                   const Divider(height: 1),
                               itemBuilder: (context, index) {
                                 final team = matchingTeams[index];
